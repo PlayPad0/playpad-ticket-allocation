@@ -374,6 +374,7 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
     uint256 public totalClaimPercent; //total to be claim percent
     uint256 private MERKLE_ROOT; // MERKLE ROOT
     address[] public investors;
+    uint256 public participantCount;
 
     /**
     -> Merkle root data structure
@@ -576,6 +577,7 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
         uint256 totalTokenAmount = calculateTokenAmount(busdAmount, userLevel);
         if (investor.totalBuyingAmountUsd == 0) {
             investors.push(msg.sender);
+            participantCount.add(1);
         }
         saleDetails.totalSoldAmountUsd = saleDetails.totalSoldAmountUsd.add(
             busdAmount
@@ -723,3 +725,4 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
         MERKLE_ROOT = _merkleRoot;
     }
 }
+
