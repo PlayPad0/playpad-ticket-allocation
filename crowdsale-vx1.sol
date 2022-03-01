@@ -359,6 +359,51 @@ library SafeERC20 {
     }
 }
 
+contract PlayPadIdoFactory is Ownable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
+    address[] public newIdo;
+    event NewIdoCreated(
+        address IdoAddress,
+        IERC20 _busdAddress,
+        IERC20 _saleToken,
+        bool _contractStatus,
+        uint256 _endTime,
+        uint256 _hardcap
+    );
+
+    // creates new IDO contract following datas as below
+    function createIDO(
+        IERC20 _busdAddress,
+        IERC20 _saleToken,
+        bool _contractStatus,
+        uint256 _endTime,
+        uint256 _hardcap
+    ) external nonReentrant onlyOwner {
+        PlayPadIdoContract newIdoContract = new PlayPadIdoContract(
+            _busdAddress,
+            _saleToken,
+            _contractStatus,
+            _endTime,
+            _hardcap
+        );
+        newIdoContract.transferOwnership(msg.sender);
+        newIdo.push(address(newIdoContract)); // Adding All IDOs
+        emit NewIdoCreated(
+            address(newIdoContract),
+            _busdAddress,
+            _saleToken,
+            _contractStatus,
+            _endTime,
+            _hardcap
+        );
+    }
+
+    function getAllPools() public view returns (address[] memory) {
+        return newIdo;
+    }
+}
+
 contract PlayPadIdoContract is ReentrancyGuard, Ownable {
     //Deployed by Main Contract
     PlayPadIdoFactory deployerContract;
@@ -368,8 +413,7 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
     IERC20 public immutable busdToken; //Stable coin token contract address
     IERC20 public saleToken; //Sale token contract address
     bool public contractStatus; //Contract running status
-    uint256 public startTime; //IDO participation start time
-    uint256 public endTime; //IDO participation end time
+    uint256 public START_TIME; //IDO participation start time
     uint256 public lockTime; //unlock date to get claim
     uint256[] public claimRoundsDate; //all claim rounds
     uint256 public totalClaimPercent; //total to be claim percent
@@ -384,7 +428,9 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
     * userAddress --
     * timestamp
     * userTotalVesting
-    * userLevel
+    * userLevel_whitelist
+    * userLevel_holders
+    * userLevel_fcfs
     */
 
     //whitelisted user data per user
@@ -396,6 +442,12 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
         uint256 claimedValue;
     }
 
+    /*
+    0 -> Whitelist
+    1 -> Holders
+    2 -> KYC Users
+     */
+
     struct saleStruct {
         uint256 hardcap;
         uint256 totalSellAmountToken;
@@ -403,6 +455,7 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
         uint256 totalSoldAmountUsd;
         uint256 maxBuyValue;
         uint256 minBuyValue;
+        uint256 endTime;
     }
 
     //claim round periods
@@ -413,29 +466,20 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
     //mappings to reach relevant information
     mapping(address => whitelistedInvestorData) public _investorData;
     mapping(uint256 => roundDatas) public _roundDatas;
-    mapping(uint256 => saleStruct) public _sales; //0 -> whitelist sale details, 1 -> holders round details
+    mapping(uint256 => saleStruct) public _sales; //0 -> whitelist sale details, 1 -> holders round details, 2 -> KYC Users
+    error InvalidAccsess(uint256 saleRound);
 
     constructor(
         IERC20 _busdAddress,
         IERC20 _saleToken,
         bool _contractStatus,
         uint256 _startTime,
-        uint256 _endTime,
         uint256 _hardcap
     ) public {
-        require(
-            _startTime < _endTime,
-            "start block must be less than finish block"
-        );
-        require(
-            _endTime > block.timestamp,
-            "finish block must be more than current block"
-        );
         busdToken = _busdAddress;
         saleToken = _saleToken;
         contractStatus = _contractStatus;
-        startTime = _startTime;
-        endTime = _endTime;
+        START_TIME = _startTime;
         hardcapUsd = _hardcap;
     }
 
@@ -470,15 +514,7 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
         nonReentrant
         onlyOwner
     {
-        startTime = _startTime;
-    }
-
-    function changeFinishTime(uint256 _finishTime)
-        external
-        nonReentrant
-        onlyOwner
-    {
-        endTime = _finishTime;
+        START_TIME = _startTime;
     }
 
     function setSaleDetails(
@@ -486,13 +522,15 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
         uint256 _totalSellAmountToken,
         uint256 _maxBuyAmount,
         uint256 _minBuyAmount,
-        uint256 _saleRound
+        uint256 _saleRound,
+        uint256 _endTime
     ) external onlyOwner nonReentrant {
         saleStruct storage saleDetails = _sales[_saleRound];
         saleDetails.hardcap = _hardcap;
         saleDetails.totalSellAmountToken = _totalSellAmountToken;
         saleDetails.maxBuyValue = _maxBuyAmount;
         saleDetails.minBuyValue = _minBuyAmount;
+        saleDetails.endTime = _endTime;
     }
 
     //calculate token amount according to deposit amount
@@ -546,24 +584,23 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
 
     //buys token if passing controls
     function buyToken(
-        uint256[3] calldata _data,
+        uint256[6] calldata _data,
         bytes32[] memory _proof,
-        uint256 busdAmount
+        uint256 busdAmount,
+        uint256 saleRound
     ) external nonReentrant mustNotPaused {
-        require(block.timestamp >= startTime);
-        require(block.timestamp <= endTime);
-        whitelistedInvestorData storage investor = _investorData[msg.sender];
-        uint256 userTotalVesting = _data[1];
-        uint256 userLevel = _data[2];
-
         bytes32 userLeaf = keccak256(abi.encodePacked(msg.sender, _data));
         bytes32 _userLeaf = keccak256(abi.encodePacked(userLeaf));
-
         require(
             MerkleProof.verify(_proof, MERKLE_ROOT, _userLeaf),
             "leaf is not correct"
         );
-        saleStruct memory saleDetails = _sales[userLevel];
+        uint256 isWhitelisted = 0;
+        saleStruct storage saleDetails = _sales[saleRound];
+        whitelistedInvestorData storage investor = _investorData[msg.sender];
+        uint256 userTotalVesting = _data[2];
+        require(block.timestamp >= START_TIME, "round is not started yet");
+
         require(
             userTotalVesting >= investor.totalBuyingAmountUsd.add(busdAmount),
             "Opps you cannot buy more than your allocation"
@@ -582,8 +619,89 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
             busdAmount >= saleDetails.minBuyValue,
             "you cannot buy less than min limit"
         );
-        require(busdToken.transferFrom(msg.sender, address(this), busdAmount));
-        uint256 totalTokenAmount = calculateTokenAmount(busdAmount, userLevel);
+
+        if (saleRound == 0) {
+            // whitelist check
+            isWhitelisted = _data[3];
+            if (isWhitelisted != 0) {
+                saleStruct memory _saleDetailsWhitelist = _sales[0];
+                require(
+                    block.timestamp <= _saleDetailsWhitelist.endTime,
+                    "round has closed"
+                );
+
+                require(
+                    busdToken.transferFrom(
+                        msg.sender,
+                        address(this),
+                        busdAmount
+                    ),
+                    "transfer failed"
+                );
+            } else {
+                revert InvalidAccsess({saleRound: saleRound});
+            }
+        } else if (saleRound == 1) {
+            //holders check
+            isWhitelisted = _data[4];
+            if (isWhitelisted != 0) {
+                saleStruct memory _saleDetailsHolders = _sales[1];
+                saleStruct memory _saleDetailsWhitelist = _sales[0];
+
+                require(
+                    block.timestamp >= _saleDetailsWhitelist.endTime,
+                    "round is not open yet"
+                );
+
+                require(
+                    block.timestamp <= _saleDetailsHolders.endTime,
+                    "round has closed"
+                );
+                require(
+                    busdToken.transferFrom(
+                        msg.sender,
+                        address(this),
+                        busdAmount
+                    ),
+                    "transfer failed"
+                );
+            } else {
+                revert InvalidAccsess({saleRound: saleRound});
+            }
+        } else if (saleRound == 2) {
+            // fcfs check
+            isWhitelisted = _data[5];
+            if (isWhitelisted != 0) {
+                saleStruct memory _saleDetailsHolders = _sales[1];
+                saleStruct memory _saleDetailsFcfs = _sales[2];
+
+                require(
+                    block.timestamp >= _saleDetailsHolders.endTime,
+                    "round is not open yet"
+                );
+
+                require(
+                    block.timestamp <= _saleDetailsFcfs.endTime,
+                    "round has closed"
+                );
+
+                require(
+                    busdToken.transferFrom(
+                        msg.sender,
+                        address(this),
+                        busdAmount
+                    ),
+                    "transfer failed"
+                );
+            } else {
+                revert InvalidAccsess({saleRound: saleRound});
+            }
+        } else {
+            // revert
+            revert InvalidAccsess({saleRound: saleRound});
+        }
+
+        uint256 totalTokenAmount = calculateTokenAmount(busdAmount, saleRound);
         if (investor.totalBuyingAmountUsd == 0) {
             investors.push(msg.sender);
             participantCount.add(1);
@@ -717,3 +835,4 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
     {
         MERKLE_ROOT = _merkleRoot;
     }
+}
