@@ -584,23 +584,16 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
 
     //buys token if passing controls
     function buyToken(
-        uint256[6] calldata _data,
+        uint256[5] calldata _data,
         bytes32[] memory _proof,
         uint256 busdAmount,
         uint256 saleRound
     ) external nonReentrant mustNotPaused {
-        bytes32 userLeaf = keccak256(abi.encodePacked(msg.sender, _data));
-        bytes32 _userLeaf = keccak256(abi.encodePacked(userLeaf));
-        require(
-            MerkleProof.verify(_proof, MERKLE_ROOT, _userLeaf),
-            "leaf is not correct"
-        );
         uint256 isWhitelisted = 0;
         saleStruct storage saleDetails = _sales[saleRound];
         whitelistedInvestorData storage investor = _investorData[msg.sender];
-        uint256 userTotalVesting = _data[2];
+        uint256 userTotalVesting = _data[1];
         require(block.timestamp >= START_TIME, "round is not started yet");
-
         require(
             userTotalVesting >= investor.totalBuyingAmountUsd.add(busdAmount),
             "Opps you cannot buy more than your allocation"
@@ -620,31 +613,46 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
             "you cannot buy less than min limit"
         );
 
-        if (saleRound == 0) {
-            // whitelist check
-            isWhitelisted = _data[3];
-            if (isWhitelisted != 0) {
-                saleStruct memory _saleDetailsWhitelist = _sales[0];
-                require(
-                    block.timestamp <= _saleDetailsWhitelist.endTime,
-                    "round has closed"
-                );
-
-                require(
-                    busdToken.transferFrom(
-                        msg.sender,
-                        address(this),
-                        busdAmount
-                    ),
-                    "transfer failed"
-                );
-            } else {
-                revert InvalidAccsess({saleRound: saleRound});
-            }
-        } else if (saleRound == 1) {
-            //holders check
+        if (saleRound == 2) {
+            //fcfs
             isWhitelisted = _data[4];
-            if (isWhitelisted != 0) {
+            require(
+                isWhitelisted != 0,
+                "user is not whitelisted for this round"
+            );
+            saleStruct memory _saleDetailsHolders = _sales[1];
+            saleStruct memory _saleDetailsFcfs = _sales[2];
+
+            require(
+                block.timestamp >= _saleDetailsHolders.endTime,
+                "round is not open yet"
+            );
+
+            require(
+                block.timestamp <= _saleDetailsFcfs.endTime,
+                "round has closed"
+            );
+
+            require(
+                busdToken.transferFrom(msg.sender, address(this), busdAmount),
+                "transfer failed"
+            );
+        } else {
+            //others
+            bytes32 userLeaf = keccak256(abi.encodePacked(msg.sender, _data));
+            bytes32 _userLeaf = keccak256(abi.encodePacked(userLeaf));
+            require(
+                MerkleProof.verify(_proof, MERKLE_ROOT, _userLeaf),
+                "leaf is not correct"
+            );
+
+            if (saleRound == 1) {
+                //holders round
+                isWhitelisted = _data[3];
+                require(
+                    isWhitelisted != 0,
+                    "user is not whitelisted for this round"
+                );
                 saleStruct memory _saleDetailsHolders = _sales[1];
                 saleStruct memory _saleDetailsWhitelist = _sales[0];
 
@@ -665,26 +673,18 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
                     ),
                     "transfer failed"
                 );
-            } else {
-                revert InvalidAccsess({saleRound: saleRound});
-            }
-        } else if (saleRound == 2) {
-            // fcfs check
-            isWhitelisted = _data[5];
-            if (isWhitelisted != 0) {
-                saleStruct memory _saleDetailsHolders = _sales[1];
-                saleStruct memory _saleDetailsFcfs = _sales[2];
-
+            } else if (saleRound == 0) {
+                //whitelist check
+                isWhitelisted = _data[2];
                 require(
-                    block.timestamp >= _saleDetailsHolders.endTime,
-                    "round is not open yet"
+                    isWhitelisted != 0,
+                    "user is not whitelisted for this round"
                 );
-
+                saleStruct memory _saleDetailsWhitelist = _sales[0];
                 require(
-                    block.timestamp <= _saleDetailsFcfs.endTime,
+                    block.timestamp <= _saleDetailsWhitelist.endTime,
                     "round has closed"
                 );
-
                 require(
                     busdToken.transferFrom(
                         msg.sender,
@@ -696,9 +696,6 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
             } else {
                 revert InvalidAccsess({saleRound: saleRound});
             }
-        } else {
-            // revert
-            revert InvalidAccsess({saleRound: saleRound});
         }
 
         uint256 totalTokenAmount = calculateTokenAmount(busdAmount, saleRound);
