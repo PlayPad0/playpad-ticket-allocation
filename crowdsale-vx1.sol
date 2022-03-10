@@ -594,6 +594,7 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
         whitelistedInvestorData storage investor = _investorData[msg.sender];
         uint256 userTotalVesting = _data[1];
         require(block.timestamp >= START_TIME, "round is not started yet");
+        require(saleRound == 0 || saleRound == 1 || saleRound == 2 ,"invalid rounds");
         require(
             userTotalVesting >= investor.totalBuyingAmountUsd.add(busdAmount),
             "Opps you cannot buy more than your allocation"
@@ -693,9 +694,8 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
                     ),
                     "transfer failed"
                 );
-            } else {
-                revert InvalidAccsess({saleRound: saleRound});
             }
+
         }
 
         uint256 totalTokenAmount = calculateTokenAmount(busdAmount, saleRound);
@@ -725,6 +725,7 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
         );
     }
 
+
     //emergency withdraw function in worst cases
     function emergencyWithdrawAllBusd() external nonReentrant onlyOwner {
         require(
@@ -745,7 +746,7 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
     }
 
     //claim tokens according to claim periods
-    function claimTokens(uint256[3] calldata _data, bytes32[] memory _proof)
+    function claimTokens(uint256[5] calldata _data, bytes32[] memory _proof)
         external
         nonReentrant
     {
