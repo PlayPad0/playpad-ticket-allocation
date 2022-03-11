@@ -467,7 +467,6 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
     mapping(address => whitelistedInvestorData) public _investorData;
     mapping(uint256 => roundDatas) public _roundDatas;
     mapping(uint256 => saleStruct) public _sales; //0 -> whitelist sale details, 1 -> holders round details, 2 -> KYC Users
-    error InvalidAccsess(uint256 saleRound);
 
     constructor(
         IERC20 _busdAddress,
