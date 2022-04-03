@@ -422,6 +422,7 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
     uint256 public participantCount;
     uint256 public totalSoldAmountUsd;
     uint256 public hardcapUsd;
+    uint256 public multipleAllocation = 1;
 
     /**
     -> Merkle root data structure
@@ -498,6 +499,10 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
     // function to change status of contract
     function changePause(bool _contractStatus) public onlyOwner nonReentrant {
         contractStatus = _contractStatus;
+    }
+
+    function setMultiAllo (uint256 _multiAllo) external onlyOwner nonReentrant {
+        multipleAllocation = _multiAllo;
     }
 
     function changeSaleTokenAddress(IERC20 _contractAddress)
@@ -592,6 +597,9 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
         saleStruct storage saleDetails = _sales[saleRound];
         whitelistedInvestorData storage investor = _investorData[msg.sender];
         uint256 userTotalVesting = _data[1];
+        if(saleRound == 1){
+            userTotalVesting = userTotalVesting.mul(multipleAllocation);
+        } 
         require(block.timestamp >= START_TIME, "round is not started yet");
         require(saleRound == 0 || saleRound == 1 || saleRound == 2 ,"invalid rounds");
         require(
