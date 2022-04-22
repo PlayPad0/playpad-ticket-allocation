@@ -611,7 +611,11 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
         saleStruct storage whitelistSale = _sales[0];
         saleStruct storage holdersSale = _sales[1];
         saleStruct storage kycSale = _sales[2];
-        if(currentTime >= START_TIME && currentTime <= END_TIME){
+        if(currentTime > END_TIME){
+            return 402;
+        }else if (currentTime < START_TIME){
+            return 401;
+        }else if(currentTime >= START_TIME && currentTime <= END_TIME){
         if(currentTime >= whitelistSale.startTime && currentTime <= whitelistSale.endTime){
             return 0;
         }else if (currentTime > holdersSale.startTime && currentTime <= holdersSale.endTime){
@@ -619,10 +623,6 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
         }else if (currentTime > kycSale.startTime && currentTime <= kycSale.endTime){
             return 2;
         }
-        }else if(currentTime < START_TIME) {
-            return 401;
-        }else if (currentTime > END_TIME){
-            return 402;
         }
     }
 
