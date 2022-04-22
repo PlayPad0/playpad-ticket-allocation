@@ -357,7 +357,6 @@ library SafeERC20 {
         }
     }
 }
-
 contract PlayPadIdoFactory is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -368,6 +367,7 @@ contract PlayPadIdoFactory is Ownable, ReentrancyGuard {
         IERC20 _saleToken,
         bool _contractStatus,
         uint256 _startTime,
+        uint256 _hardcap,
         uint256 _endTime
     );
 
@@ -377,6 +377,7 @@ contract PlayPadIdoFactory is Ownable, ReentrancyGuard {
         IERC20 _saleToken,
         bool _contractStatus,
         uint256 _startTime,
+        uint256 _hardcap,
         uint256 _endTime
     ) external nonReentrant onlyOwner {
         PlayPadIdoContract newIdoContract = new PlayPadIdoContract(
@@ -384,6 +385,7 @@ contract PlayPadIdoFactory is Ownable, ReentrancyGuard {
             _saleToken,
             _contractStatus,
             _startTime,
+            _hardcap,
             _endTime
         );
         newIdoContract.transferOwnership(msg.sender);
@@ -394,6 +396,7 @@ contract PlayPadIdoFactory is Ownable, ReentrancyGuard {
             _saleToken,
             _contractStatus,
             _startTime,
+            _hardcap,
             _endTime
         );
     }
