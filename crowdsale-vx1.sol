@@ -495,7 +495,9 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
         address indexed investorAddress,
         uint256 amount,
         uint256 timestamp,
-        uint256 totalSoldAmountUsd
+        uint256 totalSoldAmountUsd,
+        uint256 roundTotalSoldAmount,
+        uint256 roundNumber
     );
 
     //modifier to change contract status
@@ -765,7 +767,9 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
             msg.sender,
             busdAmount,
             block.timestamp,
-            totalSoldAmountUsd
+            totalSoldAmountUsd,
+            saleDetails.totalSoldAmountUsd,
+            saleRound
         );
     }
 
