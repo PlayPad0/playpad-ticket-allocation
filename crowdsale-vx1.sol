@@ -662,11 +662,7 @@ contract PlayPadIdoContract is ReentrancyGuard, Ownable {
 
         if (saleRound == 2) {
             //fcfs
-            isWhitelisted = _data[4];
-            require(
-                isWhitelisted != 0,
-                "user is not whitelisted for this round"
-            );
+           
             saleStruct memory _saleDetailsHolders = _sales[1];
             saleStruct memory _saleDetailsFcfs = _sales[2];
 
